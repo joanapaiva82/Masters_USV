@@ -115,20 +115,33 @@ def plot_bar(question):
         counts = exploded.value_counts().reset_index()
         counts.columns = ['Answer', 'Responses']
 
-    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 36))
+    other_df = counts[(counts['Responses'] <= 1) & (counts['Answer'].str.len() > 50)].copy()
+    shown = counts[~counts.index.isin(other_df.index)].copy()
+    if not other_df.empty:
+        total = other_df['Responses'].sum()
+        shown = pd.concat([
+            shown,
+            pd.DataFrame([{'Answer': 'Other (open-text)', 'Responses': total}])
+        ], ignore_index=True)
+
+    shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 36))
     fig = px.bar(
-        counts,
+        shown,
         x='Responses',
         y='Answer',
         orientation='h',
         text='Responses',
         color='Answer',
         color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(550, len(counts)*35)
+        height=max(550, len(shown)*38)
     )
     fig.update_traces(textposition='outside', textfont=dict(family="Arial Unicode MS", size=12))
-    fig.update_layout(showlegend=False, margin=dict(t=30, l=260))
+    fig.update_layout(showlegend=False, margin=dict(t=30, l=300))
     st.plotly_chart(fig, use_container_width=True)
+
+    if not other_df.empty:
+        with st.expander("Show all 'Other (open-text)' responses"):
+            st.dataframe(other_df[['Answer', 'Responses']].reset_index(drop=True), use_container_width=True)
 
 for col in df.columns:
     if col in donut_qs + bar_qs:
