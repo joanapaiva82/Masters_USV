@@ -8,11 +8,11 @@ from collections import Counter
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
-# Load CSV
+# Load data with correct encoding
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
-# Define layout from PDF
+# From PDF layout
 donut_qs = [
     "How do you rate the initial investment cost of USVs compared to traditional vessels?",
     "What percentage of operational cost savings have you observed or expect from USVs?",
@@ -31,42 +31,44 @@ bar_qs = [
     "How does data processing workflow differ when using USVs compared to traditional vessels?"
 ]
 
-# Clean label formatting
-def wrap_label(label, width=35):
-    label = str(label).replace(">", ">​").replace("<", "<​")  # render > and < safely
-    return "<br>".join(textwrap.wrap(label, width=width))
+# Clean display label
+def wrap_label(label, width=40):
+    label = str(label).replace(">", ">").replace("<", "<")
+    return "<br>".join(textwrap.wrap(label, width))
 
-# Smart color palette
-def color_palette(labels):
-    mapping = {
-        "Much lower": "#2ca02c",
-        "Somewhat lower": "#8fd19e",
-        "About the same": "#c7c7c7",
-        "Somewhat higher": "#ff9896",
-        "Much higher": "#d62728",
-        "<10%": "#2ca02c",
-        "10–25%": "#8fd19e",
-        "25–50%": "#ff9896",
-        ">50%": "#d62728"
-    }
-    return [mapping.get(label.strip(), "#1f77b4") for label in labels]
+# Smart color scheme
+def get_color(label):
+    label = label.lower().strip()
+    if "much lower" in label or "<10" in label or "1 –" in label:
+        return "#2ca02c"
+    elif "somewhat lower" in label or "10" in label or "2 –" in label:
+        return "#8fd19e"
+    elif "about the same" in label or "3 –" in label:
+        return "#c7c7c7"
+    elif "somewhat higher" in label or "25" in label or "4 –" in label:
+        return "#ff9896"
+    elif "much higher" in label or ">50" in label or "5 –" in label:
+        return "#d62728"
+    return "#1f77b4"
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
         st.warning("No responses for this question.")
         return
-    counts = responses.value_counts()
-    raw_labels = [s.replace(">", ">​").replace("<", "<​") for s in counts.index]
+    grouped = responses.map(lambda x: x.replace(">", ">").replace("<", "<").strip())
+    counts = grouped.value_counts()
+    labels = list(counts.index)
+    colors = [get_color(lbl) for lbl in labels]
     fig = px.pie(
-        names=[wrap_label(l) for l in raw_labels],
+        names=[wrap_label(l) for l in labels],
         values=counts.values,
         hole=0.4,
-        color_discrete_sequence=color_palette(raw_labels)
+        color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
     fig.update_layout(
-        height=400,
+        height=450,
         margin=dict(t=30, b=30),
         showlegend=True,
         legend_title_text=''
@@ -76,34 +78,43 @@ def plot_donut(question):
 def plot_bar(question):
     responses = df[question].dropna().astype(str)
     exploded = responses.str.split(";").explode().str.strip()
-    if exploded.empty:
+    grouped = exploded.apply(lambda x: x.replace(">", ">").replace("<", "<"))
+    if grouped.empty:
         st.warning("No responses for this question.")
         return
-    counts = exploded.value_counts().reset_index()
+    counts = grouped.value_counts().reset_index()
     counts.columns = ['Answer', 'Responses']
-    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
+
+    # Group long answers with 1 count into 'Other'
+    other_texts = counts[(counts['Responses'] == 1) & (counts['Answer'].str.len() > 60)]
+    shown = counts[~counts.index.isin(other_texts.index)].copy()
+    if not other_texts.empty:
+        other_count = other_texts['Responses'].sum()
+        shown = shown.append({'Answer': 'Other (open-text)', 'Responses': other_count}, ignore_index=True)
+
+    shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 40))
     fig = px.bar(
-        counts,
+        shown,
         x='Responses',
         y='Answer',
         orientation='h',
         text='Responses',
         color='Answer',
-        color_discrete_sequence=px.colors.qualitative.Pastel,
-        height=max(500, len(counts)*30)
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        height=max(500, len(shown)*32)
     )
     fig.update_traces(textposition='outside')
     fig.update_layout(
         showlegend=False,
-        margin=dict(t=30, l=200)
+        margin=dict(t=30, l=250)
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Render Q5–Q16
+# Render final charts
 for col in df.columns:
     if col in donut_qs + bar_qs:
         st.subheader(col)
         if col in donut_qs:
             plot_donut(col)
-        elif col in bar_qs:
+        else:
             plot_bar(col)
