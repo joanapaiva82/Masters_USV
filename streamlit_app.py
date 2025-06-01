@@ -1,7 +1,9 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import textwrap
+import unicodedata
 
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
@@ -28,24 +30,26 @@ bar_qs = [
 ]
 
 def clean_chars(text):
+    # Normalize apostrophes, dashes, and spaces
     return (
-        str(text)
+        unicodedata.normalize("NFKC", str(text))
         .replace("’", "'")
+        .replace("‘", "'")
         .replace("–", "-")
         .replace("−", "-")
         .replace("“", '"')
         .replace("”", '"')
-        .replace("‘", "'")
         .strip()
     )
 
 def wrap_label(label, width=40):
-    return "<br>".join(textwrap.wrap(clean_chars(label), width))
+    cleaned = clean_chars(label)
+    return "<br>".join(textwrap.wrap(cleaned, width))
 
 def get_q9_inverted_color(label):
-    label = clean_chars(label).strip()
+    label = clean_chars(label)
     if label.startswith("1"):
-        return "#d62728"  # red
+        return "#d62728"
     elif label.startswith("2"):
         return "#ff9896"
     elif label.startswith("3"):
@@ -53,7 +57,7 @@ def get_q9_inverted_color(label):
     elif label.startswith("4"):
         return "#8fd19e"
     elif label.startswith("5"):
-        return "#2ca02c"  # green
+        return "#2ca02c"
     return "#1f77b4"
 
 def get_q1_q2_q3_color(label):
@@ -128,7 +132,6 @@ def plot_bar(question):
     fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
     st.plotly_chart(fig, use_container_width=True)
 
-# Loop through questions
 for col in df.columns:
     if col in donut_qs + bar_qs:
         st.subheader(col)
