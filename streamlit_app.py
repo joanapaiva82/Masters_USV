@@ -6,11 +6,9 @@ import textwrap
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
-# Load data
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
-# Donut questions
 donut_qs = [
     "How do you rate the initial investment cost of USVs compared to traditional vessels?",
     "What percentage of operational cost savings have you observed or expect from USVs?",
@@ -18,7 +16,6 @@ donut_qs = [
     "How do you rate the operational efficiency of USVs vs. traditional vessels?"
 ]
 
-# Bar questions
 bar_qs = [
     "Which cost-related factors most influence USV adoption in your company?",
     "In your view, Which project types are best suited for USVs today?",
@@ -30,60 +27,67 @@ bar_qs = [
     "Do you consider USV operations safe for commercial hydrographic use today?"
 ]
 
-# Wrap long labels
-def wrap_label(label, width=40):
-    return "<br>".join(textwrap.wrap(str(label).replace("-", "–"), width))
+def clean_chars(text):
+    return (
+        str(text)
+        .replace("’", "'")
+        .replace("–", "-")
+        .replace("−", "-")
+        .replace("“", '"')
+        .replace("”", '"')
+        .replace("‘", "'")
+        .strip()
+    )
 
-# Gradient for Q9
-def get_q9_color(label):
-    label = label.strip()
+def wrap_label(label, width=40):
+    return "<br>".join(textwrap.wrap(clean_chars(label), width))
+
+def get_q9_inverted_color(label):
+    label = clean_chars(label).strip()
     if label.startswith("1"):
-        return "#2ca02c"
+        return "#d62728"  # red
     elif label.startswith("2"):
-        return "#8fd19e"
+        return "#ff9896"
     elif label.startswith("3"):
         return "#c7c7c7"
     elif label.startswith("4"):
-        return "#ff9896"
-    elif label.startswith("5"):
-        return "#d62728"
-    return "#1f77b4"
-
-# Gradient for Q1, Q2, Q3
-def get_q1_q2_q3_color(label):
-    label = label.replace("-", "–").strip().lower()
-    if "much lower" in label or "<10%" in label:
-        return "#2ca02c"
-    elif "somewhat lower" in label or "10–25%" in label:
         return "#8fd19e"
-    elif "about the same" in label or "25–50%" in label:
+    elif label.startswith("5"):
+        return "#2ca02c"  # green
+    return "#1f77b4"
+
+def get_q1_q2_q3_color(label):
+    l = clean_chars(label).lower()
+    if "much lower" in l or "<10%" in l:
+        return "#2ca02c"
+    elif "somewhat lower" in l or "10-25%" in l:
+        return "#8fd19e"
+    elif "about the same" in l or "25-50%" in l:
         return "#c7c7c7"
-    elif "somewhat higher" in label:
+    elif "somewhat higher" in l:
         return "#ff9896"
-    elif "much higher" in label or ">50%" in label:
+    elif "much higher" in l or ">50%" in l:
         return "#d62728"
     return "#1f77b4"
 
-# Group Q13 multi-responses
 def group_safety_q13(series):
     mapping = {}
     for val in series:
-        clean = "–".join([s.strip().replace("-", "–") for s in val.split(";")])
-        mapping[clean] = mapping.get(clean, 0) + 1
+        parts = sorted([clean_chars(s) for s in val.split(";")])
+        key = "; ".join(parts)
+        mapping[key] = mapping.get(key, 0) + 1
     return pd.Series(mapping).sort_values(ascending=False)
 
-# Plot donut
 def plot_donut(question):
-    responses = df[question].dropna().astype(str).str.strip()
+    responses = df[question].dropna().astype(str).map(clean_chars)
     if responses.empty:
         st.warning("No responses.")
         return
-
     counts = responses.value_counts()
     labels = list(counts.index)
 
     if question == "How do you rate the operational efficiency of USVs vs. traditional vessels?":
-        colors = [get_q9_color(l) for l in labels]
+        colors = [get_q9_inverted_color(l) for l in labels]
     elif question in donut_qs[:3]:
         colors = [get_q1_q2_q3_color(l) for l in labels]
     else:
@@ -96,37 +100,29 @@ def plot_donut(question):
         color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
+    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True)
     st.plotly_chart(fig, use_container_width=True)
 
-# Plot bar
 def plot_bar(question):
-    responses = df[question].dropna().astype(str)
+    responses = df[question].dropna().astype(str).map(clean_chars)
     if question == "Do you consider USV operations safe for commercial hydrographic use today?":
         counts = group_safety_q13(responses).reset_index()
         counts.columns = ['Answer', 'Responses']
     else:
-        exploded = responses.str.split(";").explode().str.strip()
+        exploded = responses.str.split(";").explode().map(clean_chars)
         counts = exploded.value_counts().reset_index()
         counts.columns = ['Answer', 'Responses']
 
-    # Group long single answers into "Other"
-    other_texts = counts[(counts['Responses'] == 1) & (counts['Answer'].str.len() > 60)]
-    shown = counts[~counts.index.isin(other_texts.index)].copy()
-    if not other_texts.empty:
-        total = other_texts['Responses'].sum()
-        shown = pd.concat([shown, pd.DataFrame([{'Answer': 'Other (open-text)', 'Responses': total}])], ignore_index=True)
-
-    shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 40))
+    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
     fig = px.bar(
-        shown,
+        counts,
         x='Responses',
         y='Answer',
         orientation='h',
         text='Responses',
         color='Answer',
         color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(500, len(shown) * 32)
+        height=max(500, len(counts)*32)
     )
     fig.update_traces(textposition='outside')
     fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
