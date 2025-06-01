@@ -6,13 +6,13 @@ import textwrap
 from collections import Counter
 
 st.set_page_config(layout="wide")
-st.title("Masters Research, USV vs. Traditional Vessels, Survey Results Dashboard - By Joana Paiva")
+st.title("USV Survey Results Dashboard")
 
-# Load the CSV
+# Load CSV
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
-# Chart types from PDF
+# Define layout from PDF
 donut_qs = [
     "How do you rate the initial investment cost of USVs compared to traditional vessels?",
     "What percentage of operational cost savings have you observed or expect from USVs?",
@@ -31,23 +31,25 @@ bar_qs = [
     "How does data processing workflow differ when using USVs compared to traditional vessels?"
 ]
 
+# Clean label formatting
 def wrap_label(label, width=35):
-    return "<br>".join(textwrap.wrap(str(label).replace(">", ">​").replace("<", "<​"), width=width))
+    label = str(label).replace(">", ">​").replace("<", "<​")  # render > and < safely
+    return "<br>".join(textwrap.wrap(label, width=width))
 
-def smart_colors(labels):
-    # Optional manual mapping for rating-type questions
-    color_map = {
-        "Much lower": "#2ca02c",  # green
-        "Somewhat lower": "#98df8a",
+# Smart color palette
+def color_palette(labels):
+    mapping = {
+        "Much lower": "#2ca02c",
+        "Somewhat lower": "#8fd19e",
         "About the same": "#c7c7c7",
         "Somewhat higher": "#ff9896",
-        "Much higher": "#d62728",  # red
+        "Much higher": "#d62728",
         "<10%": "#2ca02c",
-        "10–25%": "#98df8a",
+        "10–25%": "#8fd19e",
         "25–50%": "#ff9896",
         ">50%": "#d62728"
     }
-    return [color_map.get(label.strip(), "#1f77b4") for label in labels]
+    return [mapping.get(label.strip(), "#1f77b4") for label in labels]
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
@@ -55,15 +57,20 @@ def plot_donut(question):
         st.warning("No responses for this question.")
         return
     counts = responses.value_counts()
-    labels = [k.replace(">", ">​").replace("<", "<​") for k in counts.index]
+    raw_labels = [s.replace(">", ">​").replace("<", "<​") for s in counts.index]
     fig = px.pie(
-        names=[wrap_label(k) for k in labels],
+        names=[wrap_label(l) for l in raw_labels],
         values=counts.values,
         hole=0.4,
-        color_discrete_sequence=smart_colors(labels)
+        color_discrete_sequence=color_palette(raw_labels)
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(height=400, margin=dict(t=30, b=30))
+    fig.update_layout(
+        height=400,
+        margin=dict(t=30, b=30),
+        showlegend=True,
+        legend_title_text=''
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_bar(question):
@@ -74,7 +81,7 @@ def plot_bar(question):
         return
     counts = exploded.value_counts().reset_index()
     counts.columns = ['Answer', 'Responses']
-    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 35))
+    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
     fig = px.bar(
         counts,
         x='Responses',
@@ -82,16 +89,19 @@ def plot_bar(question):
         orientation='h',
         text='Responses',
         color='Answer',
-        color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(400, len(counts)*30)
+        color_discrete_sequence=px.colors.qualitative.Pastel,
+        height=max(500, len(counts)*30)
     )
     fig.update_traces(textposition='outside')
-    fig.update_layout(showlegend=False)
+    fig.update_layout(
+        showlegend=False,
+        margin=dict(t=30, l=200)
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-# Render charts for Q5–Q16
+# Render Q5–Q16
 for col in df.columns:
-    if col.startswith("How") or col.startswith("What") or col.startswith("In your view") or col.startswith("Do you"):
+    if col in donut_qs + bar_qs:
         st.subheader(col)
         if col in donut_qs:
             plot_donut(col)
