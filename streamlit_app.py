@@ -3,16 +3,14 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import textwrap
-from collections import Counter
 
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
-# Load data with correct encoding
+# Load CSV
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
-# From PDF layout
 donut_qs = [
     "How do you rate the initial investment cost of USVs compared to traditional vessels?",
     "What percentage of operational cost savings have you observed or expect from USVs?",
@@ -31,12 +29,10 @@ bar_qs = [
     "How does data processing workflow differ when using USVs compared to traditional vessels?"
 ]
 
-# Clean display label
 def wrap_label(label, width=40):
     label = str(label).replace(">", ">").replace("<", "<")
     return "<br>".join(textwrap.wrap(label, width))
 
-# Smart color scheme
 def get_color(label):
     label = label.lower().strip()
     if "much lower" in label or "<10" in label or "1 –" in label:
@@ -56,10 +52,9 @@ def plot_donut(question):
     if responses.empty:
         st.warning("No responses for this question.")
         return
-    grouped = responses.map(lambda x: x.replace(">", ">").replace("<", "<").strip())
-    counts = grouped.value_counts()
+    counts = responses.value_counts()
     labels = list(counts.index)
-    colors = [get_color(lbl) for lbl in labels]
+    colors = [get_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
         values=counts.values,
@@ -67,30 +62,24 @@ def plot_donut(question):
         color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(
-        height=450,
-        margin=dict(t=30, b=30),
-        showlegend=True,
-        legend_title_text=''
-    )
+    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_bar(question):
     responses = df[question].dropna().astype(str)
     exploded = responses.str.split(";").explode().str.strip()
-    grouped = exploded.apply(lambda x: x.replace(">", ">").replace("<", "<"))
-    if grouped.empty:
+    if exploded.empty:
         st.warning("No responses for this question.")
         return
-    counts = grouped.value_counts().reset_index()
+    counts = exploded.value_counts().reset_index()
     counts.columns = ['Answer', 'Responses']
 
-    # Group long answers with 1 count into 'Other'
     other_texts = counts[(counts['Responses'] == 1) & (counts['Answer'].str.len() > 60)]
     shown = counts[~counts.index.isin(other_texts.index)].copy()
     if not other_texts.empty:
         other_count = other_texts['Responses'].sum()
-        shown = shown.append({'Answer': 'Other (open-text)', 'Responses': other_count}, ignore_index=True)
+        other_row = pd.DataFrame([{'Answer': 'Other (open-text)', 'Responses': other_count}])
+        shown = pd.concat([shown, other_row], ignore_index=True)
 
     shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 40))
     fig = px.bar(
@@ -100,17 +89,13 @@ def plot_bar(question):
         orientation='h',
         text='Responses',
         color='Answer',
-        color_discrete_sequence=px.colors.qualitative.Set3,
+        color_discrete_sequence=px.colors.qualitative.Pastel,
         height=max(500, len(shown)*32)
     )
     fig.update_traces(textposition='outside')
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(t=30, l=250)
-    )
+    fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
     st.plotly_chart(fig, use_container_width=True)
 
-# Render final charts
 for col in df.columns:
     if col in donut_qs + bar_qs:
         st.subheader(col)
