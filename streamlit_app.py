@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import textwrap
+from collections import Counter
 
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
@@ -30,13 +31,12 @@ bar_qs = [
 ]
 
 def wrap_label(label, width=40):
-    label = str(label).replace(">", ">").replace("<", "<")
-    return "<br>".join(textwrap.wrap(label, width))
+    return "<br>".join(textwrap.wrap(label.replace(">", "\u003e").replace("<", "\u003c"), width))
 
 def get_color(label):
     label = label.lower().strip()
     if "much lower" in label or "<10" in label or "1 –" in label:
-        return "#2ca02c"
+        return "#2ca02c"  # green
     elif "somewhat lower" in label or "10" in label or "2 –" in label:
         return "#8fd19e"
     elif "about the same" in label or "3 –" in label:
@@ -44,16 +44,30 @@ def get_color(label):
     elif "somewhat higher" in label or "25" in label or "4 –" in label:
         return "#ff9896"
     elif "much higher" in label or ">50" in label or "5 –" in label:
-        return "#d62728"
+        return "#d62728"  # red
     return "#1f77b4"
+
+def group_responses(series):
+    group_map = {}
+    for resp in series:
+        parts = [p.strip() for p in str(resp).split(";") if p.strip()]
+        sorted_parts = ";".join(sorted(parts))
+        group_map[sorted_parts] = group_map.get(sorted_parts, 0) + 1
+    grouped = pd.Series(group_map).sort_values(ascending=False)
+    return grouped
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
         st.warning("No responses for this question.")
         return
-    counts = responses.value_counts()
-    labels = list(counts.index)
+    if question == "Do you consider USV operations safe for commercial hydrographic use today?":
+        counts = group_responses(responses)
+        labels = list(counts.index)
+    else:
+        counts = responses.value_counts()
+        labels = list(counts.index)
+
     colors = [get_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
@@ -62,7 +76,12 @@ def plot_donut(question):
         color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
+    fig.update_layout(
+        height=450,
+        margin=dict(t=30, b=30),
+        showlegend=True,
+        legend_title_text=''
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_bar(question):
@@ -89,7 +108,7 @@ def plot_bar(question):
         orientation='h',
         text='Responses',
         color='Answer',
-        color_discrete_sequence=px.colors.qualitative.Pastel,
+        color_discrete_sequence=px.colors.qualitative.Set3,
         height=max(500, len(shown)*32)
     )
     fig.update_traces(textposition='outside')
