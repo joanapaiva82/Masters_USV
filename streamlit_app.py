@@ -9,7 +9,7 @@ st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
 # Load CSV data
-df = pd.read_csv("usv_survey_data.csv")
+df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
 # Define chart types from the PDF
