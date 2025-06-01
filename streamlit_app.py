@@ -1,14 +1,11 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import textwrap
-from collections import Counter
 
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
-# Load CSV
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
@@ -31,44 +28,51 @@ bar_qs = [
 ]
 
 def wrap_label(label, width=40):
-    return "<br>".join(textwrap.wrap(label.replace(">", "\u003e").replace("<", "\u003c"), width))
+    return "<br>".join(textwrap.wrap(str(label).replace(">", ">").replace("<", "<"), width))
 
-def get_color(label):
-    label = label.lower().strip()
-    if "much lower" in label or "<10" in label or "1 –" in label:
-        return "#2ca02c"  # green
-    elif "somewhat lower" in label or "10" in label or "2 –" in label:
+def get_q9_color(label):
+    if label.startswith("1"):
+        return "#2ca02c"
+    elif label.startswith("2"):
         return "#8fd19e"
-    elif "about the same" in label or "3 –" in label:
+    elif label.startswith("3"):
         return "#c7c7c7"
-    elif "somewhat higher" in label or "25" in label or "4 –" in label:
+    elif label.startswith("4"):
         return "#ff9896"
-    elif "much higher" in label or ">50" in label or "5 –" in label:
-        return "#d62728"  # red
+    elif label.startswith("5"):
+        return "#d62728"
     return "#1f77b4"
 
-def group_responses(series):
-    group_map = {}
-    for resp in series:
-        parts = [p.strip() for p in str(resp).split(";") if p.strip()]
-        sorted_parts = ";".join(sorted(parts))
-        group_map[sorted_parts] = group_map.get(sorted_parts, 0) + 1
-    grouped = pd.Series(group_map).sort_values(ascending=False)
-    return grouped
+def clean_q13_answer(text):
+    parts = sorted([p.strip() for p in text.split(";")])
+    if "Yes – with operator supervision" in parts and "Yes – depends on site type" in parts:
+        return "Yes – with supervision + depends on site type"
+    if "Yes – proven in controlled settings" in parts and "Yes – with operator supervision" in parts:
+        return "Yes – proven + supervision"
+    if "Yes – proven in controlled settings" in parts and "Yes – depends on site type" in parts:
+        return "Yes – proven + depends on site type"
+    return "; ".join(parts)
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
-        st.warning("No responses for this question.")
+        st.warning("No responses.")
         return
-    if question == "Do you consider USV operations safe for commercial hydrographic use today?":
-        counts = group_responses(responses)
+
+    if question == "How do you rate the operational efficiency of USVs vs. traditional vessels?":
+        counts = responses.value_counts()
         labels = list(counts.index)
+        colors = [get_q9_color(l) for l in labels]
+    elif question == "Do you consider USV operations safe for commercial hydrographic use today?":
+        grouped = responses.map(clean_q13_answer)
+        counts = grouped.value_counts()
+        labels = list(counts.index)
+        colors = ["#1f77b4"] * len(labels)
     else:
         counts = responses.value_counts()
         labels = list(counts.index)
+        colors = ["#1f77b4"] * len(labels)
 
-    colors = [get_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
         values=counts.values,
@@ -76,45 +80,33 @@ def plot_donut(question):
         color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(
-        height=450,
-        margin=dict(t=30, b=30),
-        showlegend=True,
-        legend_title_text=''
-    )
+    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
     st.plotly_chart(fig, use_container_width=True)
 
 def plot_bar(question):
     responses = df[question].dropna().astype(str)
     exploded = responses.str.split(";").explode().str.strip()
     if exploded.empty:
-        st.warning("No responses for this question.")
+        st.warning("No data.")
         return
     counts = exploded.value_counts().reset_index()
     counts.columns = ['Answer', 'Responses']
-
-    other_texts = counts[(counts['Responses'] == 1) & (counts['Answer'].str.len() > 60)]
-    shown = counts[~counts.index.isin(other_texts.index)].copy()
-    if not other_texts.empty:
-        other_count = other_texts['Responses'].sum()
-        other_row = pd.DataFrame([{'Answer': 'Other (open-text)', 'Responses': other_count}])
-        shown = pd.concat([shown, other_row], ignore_index=True)
-
-    shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 40))
+    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
     fig = px.bar(
-        shown,
+        counts,
         x='Responses',
         y='Answer',
         orientation='h',
         text='Responses',
         color='Answer',
         color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(500, len(shown)*32)
+        height=max(500, len(counts) * 32)
     )
     fig.update_traces(textposition='outside')
     fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
     st.plotly_chart(fig, use_container_width=True)
 
+# Display all questions
 for col in df.columns:
     if col in donut_qs + bar_qs:
         st.subheader(col)
