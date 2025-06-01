@@ -38,11 +38,10 @@ def clean_chars(text):
         .replace("−", "-")
         .replace("“", '"')
         .replace("”", '"')
-        .replace("\uFFFD", "")
         .strip()
     )
 
-def wrap_label(label, width=40):
+def wrap_label(label, width=38):
     return "<br>".join(textwrap.wrap(clean_chars(label), width))
 
 def get_q9_inverted_color(label):
@@ -116,7 +115,7 @@ def plot_bar(question):
         counts = exploded.value_counts().reset_index()
         counts.columns = ['Answer', 'Responses']
 
-    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
+    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 36))
     fig = px.bar(
         counts,
         x='Responses',
@@ -125,10 +124,10 @@ def plot_bar(question):
         text='Responses',
         color='Answer',
         color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(500, len(counts)*32)
+        height=max(550, len(counts)*35)
     )
-    fig.update_traces(textposition='outside', textfont=dict(family="Arial Unicode MS"))
-    fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
+    fig.update_traces(textposition='outside', textfont=dict(family="Arial Unicode MS", size=12))
+    fig.update_layout(showlegend=False, margin=dict(t=30, l=260))
     st.plotly_chart(fig, use_container_width=True)
 
 for col in df.columns:
