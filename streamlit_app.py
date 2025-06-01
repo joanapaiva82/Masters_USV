@@ -6,7 +6,22 @@ import textwrap
 import unicodedata
 
 st.set_page_config(layout="wide")
-st.title("USV Survey Results Dashboard")
+st.title("📊 USV Industry Survey Dashboard – Expert Insights May 2025")
+
+st.markdown("""
+> This dashboard summarizes the results of a LinkedIn survey of hydrographic professionals on the **use of Uncrewed Surface Vessels (USVs)** vs. conventional platforms.
+
+- 🗓️ Date Collected: **May 2025**
+- 🌍 Total Responses: **58**
+- 💡 Topics Covered: Cost, Efficiency, Technology, Operations
+""")
+
+with st.sidebar:
+    st.markdown("### 🔎 Explore Sections")
+    st.markdown("- 💰 Investment & Operational Cost")
+    st.markdown("- ⚙️ Maintenance & Processing")
+    st.markdown("- 📡 Task Suitability & Technology")
+    st.markdown("- 🔒 Safety & Regulatory Considerations")
 
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
@@ -145,6 +160,7 @@ def plot_bar(question):
 
 for col in df.columns:
     if col in donut_qs + bar_qs:
+        st.markdown("---")
         st.subheader(col)
         if col in donut_qs:
             plot_donut(col)
