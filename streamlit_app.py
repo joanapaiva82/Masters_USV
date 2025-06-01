@@ -29,43 +29,30 @@ bar_qs = [
 ]
 
 def wrap_label(label, width=40):
-    return "<br>".join(textwrap.wrap(str(label).replace("–", "–").replace("-", "–"), width))
+    return "<br>".join(textwrap.wrap(label.replace("–", "–").replace("-", "–"), width))
 
-def get_q9_color(label):
-    label = label.strip()
-    if label.startswith("1"):
+def get_q6_q7_color(label):
+    label = label.replace("–", "-").strip()
+    if label in ["Much lower", "<10%", "1 – Much less efficient"]:
         return "#2ca02c"
-    elif label.startswith("2"):
+    elif label in ["Somewhat lower", "10–25%", "2 – Slightly less efficient"]:
         return "#8fd19e"
-    elif label.startswith("3"):
+    elif label in ["About the same", "3 – About the same"]:
         return "#c7c7c7"
-    elif label.startswith("4"):
+    elif label in ["Somewhat higher", "25–50%", "4 – Slightly more efficient"]:
         return "#ff9896"
-    elif label.startswith("5"):
+    elif label in ["Much higher", ">50%", "5 – Much more efficient"]:
         return "#d62728"
     return "#1f77b4"
-
-def group_safety_q13(series):
-    mapping = {}
-    for val in series:
-        clean = "–".join([s.strip().replace("-", "–") for s in val.split(";")])
-        mapping[clean] = mapping.get(clean, 0) + 1
-    grouped = pd.Series(mapping).sort_values(ascending=False)
-    return grouped
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
         st.warning("No responses.")
         return
-
     counts = responses.value_counts()
     labels = list(counts.index)
-    if question == "How do you rate the operational efficiency of USVs vs. traditional vessels?":
-        colors = [get_q9_color(l) for l in labels]
-    else:
-        colors = ["#1f77b4"] * len(labels)
-
+    colors = [get_q6_q7_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
         values=counts.values,
@@ -76,42 +63,11 @@ def plot_donut(question):
     fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
     st.plotly_chart(fig, use_container_width=True)
 
-def plot_bar(question):
-    responses = df[question].dropna().astype(str)
-    if question == "Do you consider USV operations safe for commercial hydrographic use today?":
-        counts = group_safety_q13(responses).reset_index()
-        counts.columns = ['Answer', 'Responses']
-    else:
-        exploded = responses.str.split(";").explode().str.strip()
-        counts = exploded.value_counts().reset_index()
-        counts.columns = ['Answer', 'Responses']
-
-    other_texts = counts[(counts['Responses'] == 1) & (counts['Answer'].str.len() > 60)]
-    shown = counts[~counts.index.isin(other_texts.index)].copy()
-    if not other_texts.empty:
-        other_count = other_texts['Responses'].sum()
-        other_row = pd.DataFrame([{'Answer': 'Other (open-text)', 'Responses': other_count}])
-        shown = pd.concat([shown, other_row], ignore_index=True)
-
-    shown['Answer'] = shown['Answer'].apply(lambda x: wrap_label(x, 40))
-    fig = px.bar(
-        shown,
-        x='Responses',
-        y='Answer',
-        orientation='h',
-        text='Responses',
-        color='Answer',
-        color_discrete_sequence=px.colors.qualitative.Set3,
-        height=max(500, len(shown)*32)
-    )
-    fig.update_traces(textposition='outside')
-    fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
-    st.plotly_chart(fig, use_container_width=True)
-
-for col in df.columns:
-    if col in donut_qs + bar_qs:
-        st.subheader(col)
-        if col in donut_qs:
-            plot_donut(col)
-        else:
-            plot_bar(col)
+# Display just Q6 and Q7
+for q in donut_qs:
+    if q in [
+        "What percentage of operational cost savings have you observed or expect from USVs?",
+        "How do maintenance costs compare between USVs and conventional vessels?"
+    ]:
+        st.subheader(q)
+        plot_donut(q)
