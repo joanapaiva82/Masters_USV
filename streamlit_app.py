@@ -14,9 +14,8 @@ def load_data():
     return pd.read_excel("usv_survey_data.xlsx")
 
 df = load_data()
-df.columns = df.columns.str.strip()  # ✅ Removes invisible spaces causing KeyError
+df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
-# --- Chart function ---
 def plot_question_summary(df, question, order=None, colors=None):
     st.markdown(f"### {question}")
     value_counts = df[question].value_counts().sort_index() if order is None else df[question].value_counts().reindex(order)
@@ -38,7 +37,7 @@ def plot_question_summary(df, question, order=None, colors=None):
     with st.expander("📋 Show response breakdown"):
         st.dataframe(value_counts.rename("Responses"), use_container_width=True)
 
-# --- Tabs for Questions ---
+# --- Tabs ---
 tabs = st.tabs([
     "Q5: Investment Cost", "Q6: Operational Savings", "Q7: Maintenance Costs", "Q8: Cost Factors",
     "Q9: Efficiency", "Q10: Project Types", "Q11: Barriers", "Q12: Unknowns", "Q13: Safety",
