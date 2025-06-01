@@ -30,7 +30,6 @@ bar_qs = [
 ]
 
 def clean_chars(text):
-    # Normalize apostrophes, dashes, and spaces
     return (
         unicodedata.normalize("NFKC", str(text))
         .replace("’", "'")
@@ -39,12 +38,12 @@ def clean_chars(text):
         .replace("−", "-")
         .replace("“", '"')
         .replace("”", '"')
+        .replace("\uFFFD", "")
         .strip()
     )
 
 def wrap_label(label, width=40):
-    cleaned = clean_chars(label)
-    return "<br>".join(textwrap.wrap(cleaned, width))
+    return "<br>".join(textwrap.wrap(clean_chars(label), width))
 
 def get_q9_inverted_color(label):
     label = clean_chars(label)
@@ -103,7 +102,7 @@ def plot_donut(question):
         hole=0.4,
         color_discrete_sequence=colors
     )
-    fig.update_traces(textinfo='percent+label')
+    fig.update_traces(textinfo='percent+label', textfont=dict(family="Arial Unicode MS"))
     fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True)
     st.plotly_chart(fig, use_container_width=True)
 
@@ -128,7 +127,7 @@ def plot_bar(question):
         color_discrete_sequence=px.colors.qualitative.Set3,
         height=max(500, len(counts)*32)
     )
-    fig.update_traces(textposition='outside')
+    fig.update_traces(textposition='outside', textfont=dict(family="Arial Unicode MS"))
     fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
     st.plotly_chart(fig, use_container_width=True)
 
