@@ -8,7 +8,7 @@ st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
-df.columns = df.columns.str.replace(u' ', ' ', regex=True).str.strip()
+df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
 donut_qs = [
     "How do you rate the initial investment cost of USVs compared to traditional vessels?",
@@ -31,7 +31,7 @@ bar_qs = [
 def wrap_label(label, width=40):
     return "<br>".join(textwrap.wrap(label.replace("–", "–").replace("-", "–"), width))
 
-def get_q6_q7_color(label):
+def get_color(label):
     label = label.replace("–", "-").strip()
     if label in ["Much lower", "<10%", "1 – Much less efficient"]:
         return "#2ca02c"
@@ -45,6 +45,16 @@ def get_q6_q7_color(label):
         return "#d62728"
     return "#1f77b4"
 
+def clean_q13(text):
+    parts = sorted([p.strip().replace("-", "–") for p in text.split(";")])
+    if "Yes – with operator supervision" in parts and "Yes – depends on site type" in parts:
+        return "Yes – with supervision + depends on site type"
+    if "Yes – proven in controlled settings" in parts and "Yes – with operator supervision" in parts:
+        return "Yes – proven + supervision"
+    if "Yes – proven in controlled settings" in parts and "Yes – depends on site type" in parts:
+        return "Yes – proven + depends on site type"
+    return "; ".join(parts)
+
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
@@ -52,7 +62,7 @@ def plot_donut(question):
         return
     counts = responses.value_counts()
     labels = list(counts.index)
-    colors = [get_q6_q7_color(l) for l in labels]
+    colors = [get_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
         values=counts.values,
@@ -60,14 +70,40 @@ def plot_donut(question):
         color_discrete_sequence=colors
     )
     fig.update_traces(textinfo='percent+label')
-    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True, legend_title_text='')
+    fig.update_layout(height=450, margin=dict(t=30, b=30), showlegend=True)
     st.plotly_chart(fig, use_container_width=True)
 
-# Display just Q6 and Q7
-for q in donut_qs:
-    if q in [
-        "What percentage of operational cost savings have you observed or expect from USVs?",
-        "How do maintenance costs compare between USVs and conventional vessels?"
-    ]:
-        st.subheader(q)
-        plot_donut(q)
+def plot_bar(question):
+    responses = df[question].dropna().astype(str)
+    if question == "Do you consider USV operations safe for commercial hydrographic use today?":
+        grouped = responses.map(clean_q13)
+        counts = grouped.value_counts().reset_index()
+        counts.columns = ['Answer', 'Responses']
+    else:
+        exploded = responses.str.split(";").explode().str.strip()
+        counts = exploded.value_counts().reset_index()
+        counts.columns = ['Answer', 'Responses']
+
+    counts['Answer'] = counts['Answer'].apply(lambda x: wrap_label(x, 40))
+    fig = px.bar(
+        counts,
+        x='Responses',
+        y='Answer',
+        orientation='h',
+        text='Responses',
+        color='Answer',
+        color_discrete_sequence=px.colors.qualitative.Set3,
+        height=max(500, len(counts)*32)
+    )
+    fig.update_traces(textposition='outside')
+    fig.update_layout(showlegend=False, margin=dict(t=30, l=250))
+    st.plotly_chart(fig, use_container_width=True)
+
+# Run all
+for col in df.columns:
+    if col in donut_qs + bar_qs:
+        st.subheader(col)
+        if col in donut_qs:
+            plot_donut(col)
+        else:
+            plot_bar(col)
