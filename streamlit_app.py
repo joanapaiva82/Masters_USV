@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 
 st.set_page_config(page_title="USV Survey Dashboard", layout="wide")
-st.title("🚤 Masters Research 
+st.title("🚤 Masters Research USV Survey Dashboard – By Joana Paiva")
 # Force rebuild
 
 import streamlit as st
