@@ -8,7 +8,6 @@ from collections import Counter
 st.set_page_config(layout="wide")
 st.title("USV Survey Results Dashboard")
 
-# Load CSV
 df = pd.read_csv("usv_survey_data.csv", encoding="ISO-8859-1")
 df.columns = df.columns.str.replace(u'\xa0', ' ', regex=True).str.strip()
 
@@ -31,44 +30,57 @@ bar_qs = [
 ]
 
 def wrap_label(label, width=40):
-    return "<br>".join(textwrap.wrap(label.replace(">", "\u003e").replace("<", "\u003c"), width))
+    return "<br>".join(textwrap.wrap(label.replace(">", ">").replace("<", "<"), width))
 
-def get_color(label):
-    label = label.lower().strip()
-    if "much lower" in label or "<10" in label or "1 –" in label:
+def get_color_q9(label):
+    if label.startswith("1"):
         return "#2ca02c"  # green
-    elif "somewhat lower" in label or "10" in label or "2 –" in label:
+    elif label.startswith("2"):
         return "#8fd19e"
-    elif "about the same" in label or "3 –" in label:
+    elif label.startswith("3"):
         return "#c7c7c7"
-    elif "somewhat higher" in label or "25" in label or "4 –" in label:
+    elif label.startswith("4"):
         return "#ff9896"
-    elif "much higher" in label or ">50" in label or "5 –" in label:
+    elif label.startswith("5"):
         return "#d62728"  # red
     return "#1f77b4"
 
-def group_responses(series):
-    group_map = {}
-    for resp in series:
-        parts = [p.strip() for p in str(resp).split(";") if p.strip()]
-        sorted_parts = ";".join(sorted(parts))
-        group_map[sorted_parts] = group_map.get(sorted_parts, 0) + 1
-    grouped = pd.Series(group_map).sort_values(ascending=False)
-    return grouped
+def clean_q13_answer(text):
+    parts = sorted([p.strip() for p in text.split(";")])
+    if "Yes – with operator supervision" in parts and "Yes – depends on site type" in parts:
+        return "Yes – with supervision + depends on site type"
+    if "Yes – proven in controlled settings" in parts and "Yes – with operator supervision" in parts:
+        return "Yes – proven + supervision"
+    if "Yes – proven in controlled settings" in parts and "Yes – depends on site type" in parts:
+        return "Yes – proven + depends on site type"
+    if "Yes – proven in controlled settings" in parts:
+        return "Yes – proven in controlled settings"
+    if "Yes – with operator supervision" in parts:
+        return "Yes – with operator supervision"
+    if "Yes – depends on site type" in parts:
+        return "Yes – depends on site type"
+    return "; ".join(parts)
 
 def plot_donut(question):
     responses = df[question].dropna().astype(str).str.strip()
     if responses.empty:
         st.warning("No responses for this question.")
         return
+
     if question == "Do you consider USV operations safe for commercial hydrographic use today?":
-        counts = group_responses(responses)
+        grouped = responses.map(clean_q13_answer)
+        counts = grouped.value_counts()
         labels = list(counts.index)
+        colors = ["#1f77b4"] * len(labels)
+    elif question == "How do you rate the operational efficiency of USVs vs. traditional vessels?":
+        counts = responses.value_counts()
+        labels = list(counts.index)
+        colors = [get_color_q9(l) for l in labels]
     else:
         counts = responses.value_counts()
         labels = list(counts.index)
+        colors = [get_color_q9(l) for l in labels]
 
-    colors = [get_color(l) for l in labels]
     fig = px.pie(
         names=[wrap_label(l) for l in labels],
         values=counts.values,
